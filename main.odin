@@ -4,15 +4,15 @@ import "core:fmt"
 import rl "vendor:raylib"
 
 FIELD_SIZE :: [2]int{7, 7}
-MARGIN :: [4]int{20, 60, 20, 20} // left, top, right, bottom
-CELL_SIZE_HALF :: 40
+MARGIN :: [4]int{32, 64, 32, 32} // left, top, right, bottom
+CELL_SIZE_HALF :: 64
 
 CELL_SIZE :: 2 * CELL_SIZE_HALF
 ROBOT_SIZE :: 2 * ROBOT_SIZE_HALF
 
-ROBOT_SIZE_HALF :: 30
-WIND_SHIELD_SIZE_HALF :: [2]int{25, 10}
-WIND_SHIELD_OFFSET :: 5
+ROBOT_SIZE_HALF :: 48
+WIND_SHIELD_SIZE_HALF :: [2]int{40, 16}
+WIND_SHIELD_OFFSET :: 8
 ROBOT_OFFSET :: CELL_SIZE_HALF - ROBOT_SIZE_HALF
 
 WINDOW_SIZE := CELL_SIZE * FIELD_SIZE + MARGIN.xy + MARGIN.zw
@@ -20,100 +20,80 @@ WINDOW_SIZE := CELL_SIZE * FIELD_SIZE + MARGIN.xy + MARGIN.zw
 main :: proc() {
 	game := init_game()
 	strat := init_strategy()
+	defer delete(game.field.cells)
 
 	rl.InitWindow(i32(WINDOW_SIZE.x), i32(WINDOW_SIZE.y), "Main window")
 	last_tick := rl.GetTime()
+	unsaved_frame := true
+	i_frame := 0
 	for !rl.WindowShouldClose() {
-		rl.BeginDrawing()
-		rl.ClearBackground(rl.WHITE)
-		rl.DrawFPS(20, 20)
 		cur_tick := rl.GetTime()
-		if game.field.n_dirts > 0 && cur_tick > last_tick + 0.1 {
+		if !unsaved_frame && game.field.n_dirts > 0 && cur_tick >= last_tick + 0.0 {
 			strat_step(&strat, &game)
 			last_tick = cur_tick
+			unsaved_frame = true
 		}
+
+		rl.BeginDrawing()
+		rl.DrawFPS(20, 20)
+		rl.ClearBackground(rl.WHITE)
 		draw_game(&game)
 		rl.EndDrawing()
+
+		if unsaved_frame {
+			unsaved_frame = false
+			image := rl.LoadImageFromScreen()
+			defer rl.UnloadImage(image)
+			filename := fmt.ctprintf("out/frame%d.png", i_frame)
+			defer delete(filename, allocator = context.temp_allocator)
+			i_frame += 1
+			// assert(rl.ExportImage(image, filename))
+		}
 	}
 }
 
 Strategy :: struct {
-	schedule:       Queue(3, Action),
+	state:          enum {
+		READY,
+		MOVING_FORWARD,
+	},
 	last_unplanted: [2]int,
 	looped:         bool,
 }
 
-Action :: enum {
-	FORWARD,
-	RIGHT,
-	LEFT,
-	PLANT,
-}
-
 strat_step :: proc(strat: ^Strategy, game: ^Game) {
-	try_move_forward :: proc(strat: ^Strategy, game: ^Game) {
-		if is_free_front(game) do assert(queue_push(&strat.schedule, Action.FORWARD))
-	}
-
 	try_plant_and_move_forward :: proc(strat: ^Strategy, game: ^Game) {
 		strat.looped = false
 		strat.last_unplanted = game.robot.pos + game.robot.forward
-		if is_plantable(game) do assert(queue_push(&strat.schedule, Action.PLANT))
-		try_move_forward(strat, game)
-	}
-
-	if strat.schedule.len == 0 {
-		if !is_free_back(game) && !is_free_left(game) && !is_free_right(game) {
-			try_plant_and_move_forward(strat, game)
-		} else if is_free_right(game) {
-			assert(queue_push(&strat.schedule, Action.RIGHT))
-			if is_free_back(game) do assert(queue_push(&strat.schedule, Action.FORWARD))
-		} else if is_free_front(game) {
-			if strat.looped && strat.last_unplanted == game.robot.pos {
-				try_plant_and_move_forward(strat, game)
-			} else {
-				assert(queue_push(&strat.schedule, Action.FORWARD))
-				strat.looped = true
-			}
+		if is_plantable(game) {
+			plant(game)
+			if is_free_front(game) do strat.state = .MOVING_FORWARD
 		} else {
-			assert(queue_push(&strat.schedule, Action.LEFT))
+			if is_free_front(game) do move_forward(game)
 		}
 	}
-
-	switch queue_pop(&strat.schedule) or_else Action.FORWARD {
-	case .FORWARD:
+	switch strat.state {
+	case .READY: // do nothing
+	case .MOVING_FORWARD:
 		move_forward(game)
-	case .RIGHT:
-		turn_right(game)
-	case .LEFT:
-		turn_left(game)
-	case .PLANT:
-		plant(game)
+		strat.state = .READY
+		return
 	}
-
-}
-
-Queue :: struct($N: int, $T: typeid) {
-	items: [N]T,
-	start: int,
-	len:   int,
-}
-
-queue_push :: proc(q: ^Queue($N, $T), item: T) -> bool {
-	(q.len < N) or_return
-	pos := (q.start + q.len) % N
-	q.items[pos] = item
-	q.len += 1
-	return true
-}
-
-queue_pop :: proc(q: ^Queue($N, $T)) -> (item: T, ok: bool) {
-	ok = q.len > 0
-	ok or_return
-	item = q.items[q.start]
-	q.start = (q.start + 1) % N
-	q.len -= 1
-	return
+	if !is_free_back(game) && !is_free_left(game) && !is_free_right(game) {
+		try_plant_and_move_forward(strat, game)
+	} else if is_free_right(game) {
+		turn_right(game)
+		if is_free_right(game) do strat.state = .MOVING_FORWARD
+	} else if is_free_front(game) {
+		if strat.looped && strat.last_unplanted == game.robot.pos {
+			try_plant_and_move_forward(strat, game)
+		} else {
+			move_forward(game)
+			strat.looped = true
+		}
+	} else {
+		turn_left(game)
+	}
 }
 
 init_strategy :: proc() -> Strategy {
@@ -268,8 +248,8 @@ _get_cell :: proc(game: ^Game, off: [2]int) -> (cell: Cell, ok: bool) {
 	right := rotate_right(forward)
 	pos += off.x * forward + off.y * right
 	size := game.field.size
-	(0 <= pos.x && pos.x < size.x) or_return
-	(0 <= pos.y && pos.y < size.y) or_return
+	if 0 > pos.x || pos.x >= size.x do return
+	if 0 > pos.y || pos.y >= size.y do return
 	cell = game.field.cells[pos.x + size.x * pos.y]
 	ok = true
 	return

@@ -1,3 +1,6 @@
-*.exe
-*.pdb
-ols.json
+/*.exe
+/*.pdb
+/ols.json
+/out
+/out.webm
+/out.mp4
