@@ -1,5 +1,7 @@
 /*.exe
 /*.pdb
+/*.dll
+/*.wasm
 /ols.json
 /out
 /out.webm
