@@ -1,6 +1,9 @@
 /*.exe
 /*.pdb
 /*.dll
+/*.obj
+/*.lib
+/*.exp
 /*.wasm
 /ols.json
 /out
