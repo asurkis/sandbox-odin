@@ -26,7 +26,7 @@ main :: proc() {
 			if rl.WindowShouldClose() do game_continues = false
 			rl.BeginDrawing()
 			rl.ClearBackground(rl.WHITE)
-			rl.DrawText("Game.dll not loaded", 100, 100, 20, rl.RED)
+			rl.DrawText("game.dll not loaded", 100, 100, 20, rl.RED)
 			rl.EndDrawing()
 		}
 	}
@@ -35,9 +35,9 @@ main :: proc() {
 		game_dll.on_deinit(game_state)
 		ok := dynlib.unload_library(game_dll.__handle)
 		if ok {
-			// fmt.println("Successfully unloaded Game.dll")
+			// fmt.println("Successfully unloaded game.dll")
 		} else {
-			// fmt.println("Failed to unload Game.dll")
+			// fmt.println("Failed to unload game.dll")
 		}
 	}
 }
@@ -57,15 +57,15 @@ game_state: rawptr = nil
 
 load_dll :: proc() {
 	if dll_loaded do return
-	// fmt.println("Trying to reload Game.dll")
-	count, _ := dynlib.initialize_symbols(&game_dll, "Game")
+	// fmt.println("Trying to reload game.dll")
+	count, _ := dynlib.initialize_symbols(&game_dll, "game")
 	dll_loaded = count == 5
 	if count == -1 {
-		// fmt.println("Could not load Game.dll")
+		// fmt.println("Could not load game.dll")
 	} else if !dll_loaded {
 		// fmt.println("Found only", count, "symbols")
 	} else {
-		// fmt.println("Successfully loaded Game.dll")
+		// fmt.println("Successfully loaded game.dll")
 	}
 
 	if dll_loaded {
@@ -79,12 +79,12 @@ load_dll :: proc() {
 
 unload_dll :: proc() {
 	if !dll_loaded do return
-	// fmt.println("Trying to unload Game.dll")
+	// fmt.println("Trying to unload game.dll")
 	dll_loaded = false
 	game_dll.on_unload(game_state)
 	ok := dynlib.unload_library(game_dll.__handle)
 	assert(ok)
-	// fmt.println("Successfully unloaded Game.dll")
+	// fmt.println("Successfully unloaded game.dll")
 	game_dll = {}
 }
 
@@ -95,7 +95,7 @@ reload_dll :: proc() {
 		process_desc.command = {
 			"odin",
 			"build",
-			"Game",
+			"game",
 			"-build-mode:dll",
 			"-define:RAYLIB_SHARED=true",
 			"-debug",
