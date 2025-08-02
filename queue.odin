@@ -18,7 +18,7 @@ pop :: proc(q: ^Queue($T, $N)) -> (x: T, ok: bool) {
 	if empty(q) do return
 	x = q.items[q.first]
 	q.first = (q.first + 1) % N
-        q.count -= 1
+	q.count -= 1
 	ok = true
 	return
 }

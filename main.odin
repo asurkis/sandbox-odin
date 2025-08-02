@@ -1,7 +1,6 @@
 package main
 
 import "core:fmt"
-import "core:math"
 import rl "vendor:raylib"
 
 FIELD_SIZE :: [2]int{7, 7}
@@ -26,8 +25,6 @@ main :: proc() {
 
 	rl.InitWindow(i32(WINDOW_SIZE.x), i32(WINDOW_SIZE.y), "Main window")
 	for !rl.WindowShouldClose() {
-		cur_tick := rl.GetTime()
-
 		if !is_over(game) && empty(&game.anim.queue) {
 			strat_step(&strat, &game)
 		}
