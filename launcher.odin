@@ -8,7 +8,7 @@ main :: proc() {
 	defer game.on_deinit(game_state)
 	game_continues := true
 
-	rl.InitWindow(1280, 720, "Main window")
+	rl.InitWindow(1920, 1080, "Main window")
 	for game_continues {
 		game_continues = game.on_frame(game_state)
 	}

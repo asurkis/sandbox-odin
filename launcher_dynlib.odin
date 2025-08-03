@@ -8,7 +8,7 @@ import rl "vendor:raylib"
 main :: proc() {
 	game_continues := true
 
-	rl.InitWindow(1280, 720, "Main window")
+	rl.InitWindow(1920, 1080, "Main window")
 	reload_dll()
 
 	for game_continues {
@@ -45,7 +45,7 @@ main :: proc() {
 Game_Symbol_Table :: struct {
 	on_init:   proc() -> rawptr,
 	on_deinit: proc(_: rawptr),
-	on_reload: proc(_: rawptr),
+	on_reload: proc(_: rawptr) -> rawptr,
 	on_unload: proc(_: rawptr),
 	on_frame:  proc(_: rawptr) -> bool,
 	__handle:  dynlib.Library,
@@ -72,7 +72,7 @@ load_dll :: proc() {
 		if game_state == nil {
 			game_state = game_dll.on_init()
 		} else {
-			game_dll.on_reload(game_state)
+			game_state = game_dll.on_reload(game_state)
 		}
 	}
 }
@@ -100,6 +100,9 @@ reload_dll :: proc() {
 			"-define:RAYLIB_SHARED=true",
 			"-debug",
 		}
+		// process_desc.stdin = os2.stdin
+		process_desc.stdout = os2.stdout
+		process_desc.stderr = os2.stderr
 		process, err := os2.process_start(process_desc)
 		if err != nil do return
 		defer _ = os2.process_close(process)
