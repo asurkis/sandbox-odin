@@ -5,6 +5,7 @@
 /*.lib
 /*.exp
 /*.wasm
+/*.rdi
 /ols.json
 /out
 /out.webm
