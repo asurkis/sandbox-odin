@@ -44,10 +44,10 @@ on_reload :: proc(game_rawptr: rawptr) -> rawptr {
 	if game0.version == 0 do game0.version = 1
 	if game0.version >= 1 {
 		game := (^Game1)(game0)
-		NEED_RELOAD :: true
-		if (NEED_RELOAD ||
-			   game.background.width != WINDOW_WIDTH ||
-			   game.background.height != WINDOW_HEIGHT) {
+		need_reload := true
+		need_reload |= game.background.width != WINDOW_WIDTH
+		need_reload |= game.background.height != WINDOW_HEIGHT
+		if need_reload {
 			rl.UnloadTexture(game.background_gpu)
 			// rl.UnloadImage(game.background)
 			free(game.background.data)
@@ -58,7 +58,7 @@ on_reload :: proc(game_rawptr: rawptr) -> rawptr {
 			data := make([dynamic]u8, 4 * WINDOW_WIDTH * WINDOW_HEIGHT)
 			for y in 0 ..< WINDOW_HEIGHT {
 				for x in 0 ..< WINDOW_WIDTH {
-					val := 0.5 + 0.5 * math.sin(f32(x) / 5)
+					val := 0.5 + 0.5 * math.sin(f32(x) / 20)
 					val = math.saturate(val) * 255
 					data[(y * WINDOW_WIDTH + x) * 4 + 0] = u8(val)
 					data[(y * WINDOW_WIDTH + x) * 4 + 1] = u8(val)
@@ -132,30 +132,61 @@ on_frame :: proc(game_rawptr: rawptr) -> (game_continues: bool) {
 	// rl.DrawLineEx(vec_cast(f32, game.pos), vec_cast(f32, game.pos + 100 * forward), 10, rl.RED)
 	rl.DrawCircleV(vec_cast(f32, game.pos), 10, rl.BLUE)
 
-	for dy in 0 ..< 7 {
+	for dy in 0 ..< 15 {
 		sample_sum: f64
-		for dx in 1 ..= 16 {
-			dist := math.pow(2, 0.25 * f64(dx))
-			offx := 20 * dist * forward
-			offy := 4 * dist * (f64(dy) - 3) * right
-			pos := game.pos + offx + offy
-			ipos := vec_cast(int, pos)
+		sample_integral: f64
+		sample_dir := forward + (f64(dy) - 7) * right / 7
+		FROX_DEPTH :: 80
+		FARPLANE :: 4
+		DEPTH :: 16
+		for dx in 1 ..= FROX_DEPTH {
+			dist0 := math.pow(2, f64(dx - 1) * FARPLANE / FROX_DEPTH)
+			dist1 := math.pow(2, f64(dx) * FARPLANE / FROX_DEPTH)
+			pos0 := game.pos + 20 * dist0 * sample_dir
+			pos1 := game.pos + 20 * dist1 * sample_dir
+			ipos := vec_cast(int, pos1)
 			// fpos: [2]f64
 			// fpos := math.round(pos)
+
 			sample_b: u8
-			if 0 <= ipos.x && ipos.x < WINDOW_WIDTH && 0 <= ipos.y && ipos.y < WINDOW_HEIGHT {
-				sample_b = ([^]u8)(game.background.data)[4 * (ipos.y * WINDOW_WIDTH + ipos.x)]
-			}
-			sample := f64(sample_b) / 255
-			sample_sum += sample
-			// val := 0.5 + 0.5 * math.sin(f32(pos.x) / 10)
-			// sample = u8(math.saturate(val) * 255)
+			// sample_pos_valid := true
+			// sample_pos_valid &= 0 <= ipos.x && ipos.x < WINDOW_WIDTH
+			// sample_pos_valid &= 0 <= ipos.y && ipos.y < WINDOW_HEIGHT
+			// sample_i := 4 * (ipos.y * WINDOW_WIDTH + ipos.x)
+			// if sample_pos_valid do sample_b = ([^]u8)(game.background.data)[sample_i]
+
+			val := 0.5 + 0.5 * math.sin(f32(pos1.x) / 20)
+			sample_b = u8(math.saturate(val) * 255)
+			// sample := f64(sample_b) / 255
+			sample := f64(val)
+			// integral (0.5 + 0.5 * sin(a t + b)) = 0.5 t - 0.5 cos(a t + b) / a + C
+			// a t0 + b = pos0.x / 20
+			// a t1 + b = pos1.x / 20
+			// a (t1 - t0) = pos1.x - pos0.x
+			// a = (pos1.x - pos0.x) / (t1 - t0)
+			// b = pos0.x - a t0
+			a := (pos1.x - pos0.x) / math.max(dist1 - dist0, 0.01) / 20
+			b := pos0.x / 20 - a * dist0
+			integral := 0.5 * (dist1 - dist0)
+			integral +=
+				0.5 *
+				(math.cos(a * dist0 + b) - math.cos(a * dist1 + b)) /
+				(math.sign(a) * math.max(math.abs(a), 0.01))
+			sample_sum += sample * (dist1 - dist0) / DEPTH
+			sample_integral += integral / DEPTH
 			color := rl.Color{sample_b, sample_b, sample_b, 255}
-			rl.DrawCircleV(vec_cast(f32, pos), 10, color)
+			rl.DrawCircleV(vec_cast(f32, pos1), 10, color)
 		}
-		sample_sum_b := u8(math.saturate(sample_sum / 16) * 255)
-		color := rl.Color{sample_sum_b, sample_sum_b, sample_sum_b, 255}
-		rl.DrawRectangle(i32(dy) * 50 + 50, WINDOW_HEIGHT - 150, 50, 100, color)
+		{
+			b := u8(math.saturate(sample_sum) * 255)
+			color := rl.Color{b, b, b, 255}
+			rl.DrawRectangle(i32(dy) * 50 + 50, WINDOW_HEIGHT - 150, 50, 50, color)
+		}
+		{
+			b := u8(math.saturate(math.abs(sample_sum - sample_integral)) * 255)
+			color := rl.Color{b, b, b, 255}
+			rl.DrawRectangle(i32(dy) * 50 + 50, WINDOW_HEIGHT - 100, 50, 50, color)
+		}
 	}
 	rl.DrawFPS(10, 10)
 	return
